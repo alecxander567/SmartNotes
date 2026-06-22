@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 
-const ENDPOINT_SINGLE = "http://localhost:8000/upload/";
-const ENDPOINT_MULTIPLE = "http://localhost:8000/upload/multiple/";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const ENDPOINT_SINGLE = `${API_URL}/upload/`;
+const ENDPOINT_MULTIPLE = `${API_URL}/upload/multiple/`;
 const ALLOWED = [".pdf", ".doc", ".docx", ".ppt", ".pptx"];
 const MAX_SIZE = 10 * 1024 * 1024;
 
