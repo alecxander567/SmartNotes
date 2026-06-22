@@ -35,3 +35,4 @@ An AI-powered file processing tool that extracts text from uploaded documents an
 - Supabase
 
 ---
+live demo here: https://smart-notes-application.netlify.app/
