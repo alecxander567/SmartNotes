@@ -36,49 +36,73 @@ const STATUS_DOT = {
 
 const NAV_ITEMS = ["Upload", "How to Use", "About"];
 
-// ── Parser ──────────────────────────────────────────────────────────────────
-
 function parseNotesResponse(raw) {
-  if (!raw) return { keywords: [], summary: "" };
-
-  const kwMatch = raw.match(/KEYWORDS:\s*([\s\S]*?)(?=\nSUMMARY:|$)/i);
-  const kwText = kwMatch ? kwMatch[1].trim() : "";
-  const keywords = kwText
-    .split("\n")
-    .map((line) => {
-      const idx = line.indexOf("->");
-      if (idx === -1) return null;
-      const keyword = line
-        .slice(0, idx)
-        .replace(/^[•\-*]\s*/, "")
-        .trim();
-      const description = line.slice(idx + 2).trim();
-      if (!keyword || !description) return null;
-      return { keyword, description };
-    })
-    .filter(Boolean);
-
-  const sumMatch = raw.match(/SUMMARY:\s*([\s\S]*?)$/i);
-  const summary = sumMatch ? sumMatch[1].trim() : "";
-
-  return { keywords, summary };
+  if (!raw)
+    return { overview: "", keyPoints: [], details: [], conclusions: [] };
+  const section = (label) => {
+    const re = new RegExp(
+      `${label}:\\s*([\\s\\S]*?)(?=\\nOVERVIEW:|\\nKEY POINTS:|\\nDETAILS:|\\nCONCLUSIONS:|$)`,
+      "i",
+    );
+    const m = raw.match(re);
+    return m ? m[1].trim() : "";
+  };
+  const bullets = (text) =>
+    text
+      .split("\n")
+      .map((l) => l.replace(/^[•\-*]\s*/, "").trim())
+      .filter(Boolean);
+  return {
+    overview: section("OVERVIEW"),
+    keyPoints: bullets(section("KEY POINTS")),
+    details: bullets(section("DETAILS")),
+    conclusions: bullets(section("CONCLUSIONS")),
+  };
 }
 
 function notesToPlainText(note, parsed) {
-  const { keywords, summary } = parsed;
+  const { overview, keyPoints, details, conclusions } = parsed;
   const lines = [`Notes: ${note.filename}`, ""];
-  if (keywords.length) {
-    lines.push("KEYWORDS");
-    keywords.forEach(({ keyword, description }) =>
-      lines.push(`${keyword} → ${description}`),
-    );
-    lines.push("");
-  }
-  if (summary) lines.push("SUMMARY", summary);
+  if (overview) lines.push("OVERVIEW", overview, "");
+  if (keyPoints.length)
+    lines.push("KEY POINTS", ...keyPoints.map((b) => `• ${b}`), "");
+  if (details.length)
+    lines.push("DETAILS", ...details.map((b) => `• ${b}`), "");
+  if (conclusions.length)
+    lines.push("CONCLUSIONS", ...conclusions.map((b) => `• ${b}`));
   return lines.join("\n");
 }
 
-// ── Note display components ──────────────────────────────────────────────────
+function BulletList({ items }) {
+  return (
+    <ul
+      style={{
+        listStyle: "none",
+        margin: 0,
+        padding: 0,
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}>
+      {items.map((b, i) => (
+        <li
+          key={i}
+          style={{
+            display: "flex",
+            gap: 8,
+            fontSize: 13,
+            color: THEME.textSecondary,
+            lineHeight: 1.55,
+          }}>
+          <span style={{ color: THEME.jade, flexShrink: 0, marginTop: 1 }}>
+            ▸
+          </span>
+          <span>{b}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function SectionLabel({ children }) {
   return (
@@ -96,93 +120,47 @@ function SectionLabel({ children }) {
   );
 }
 
-function KeywordRow({ keyword, description }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 10,
-        padding: "8px 0",
-        borderBottom: `1px solid ${THEME.border}`,
-        alignItems: "baseline",
-      }}>
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: THEME.jadeMid,
-          flexShrink: 0,
-          minWidth: 110,
-          maxWidth: 150,
-          wordBreak: "break-word",
-        }}>
-        {keyword}
-      </span>
-      <span
-        style={{
-          color: THEME.jadeDark,
-          fontSize: 12,
-          flexShrink: 0,
-          userSelect: "none",
-        }}>
-        →
-      </span>
-      <span
-        style={{
-          fontSize: 13,
-          color: THEME.textSecondary,
-          lineHeight: 1.5,
-        }}>
-        {description}
-      </span>
-    </div>
-  );
-}
-
 function NotesSections({ notes, expanded }) {
-  const { keywords, summary } = notes;
-  const visible = expanded ? keywords : keywords.slice(0, 6);
-
+  const { overview, keyPoints, details, conclusions } = notes;
+  const vkp = expanded ? keyPoints : keyPoints.slice(0, 4);
+  const vd = expanded ? details : details.slice(0, 4);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {keywords.length > 0 && (
+      {overview && (
         <div>
-          <SectionLabel>Keywords</SectionLabel>
-          <div>
-            {visible.map((item, i) => (
-              <KeywordRow
-                key={i}
-                keyword={item.keyword}
-                description={item.description}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {summary && (
-        <div
-          style={{
-            paddingTop: 14,
-            borderTop: `1px solid ${THEME.border}`,
-          }}>
-          <SectionLabel>Summary</SectionLabel>
+          <SectionLabel>Overview</SectionLabel>
           <p
             style={{
               margin: 0,
               fontSize: 13,
               color: THEME.textSecondary,
-              lineHeight: 1.65,
+              lineHeight: 1.6,
             }}>
-            {summary}
+            {overview}
           </p>
+        </div>
+      )}
+      {keyPoints.length > 0 && (
+        <div>
+          <SectionLabel>Key points</SectionLabel>
+          <BulletList items={vkp} />
+        </div>
+      )}
+      {details.length > 0 && (
+        <div>
+          <SectionLabel>Details</SectionLabel>
+          <BulletList items={vd} />
+        </div>
+      )}
+      {conclusions.length > 0 && (
+        <div>
+          <SectionLabel>Conclusions</SectionLabel>
+          <BulletList items={conclusions} />
         </div>
       )}
     </div>
   );
 }
-
-// ── Buttons ──────────────────────────────────────────────────────────────────
 
 function IconBtn({ onClick, title, children }) {
   const [hover, setHover] = useState(false);
@@ -292,7 +270,47 @@ function DownloadButton({ note, parsed }) {
       });
     };
 
-    // White page
+    const addSection = (label, items) => {
+      if (!items || (Array.isArray(items) && items.length === 0)) return;
+      y += 14;
+      checkPage(40);
+
+      // Bold green section label
+      addParagraph(label, 11, [0, 160, 70], true);
+      y += 2;
+
+      // Thin divider line
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.4);
+      doc.line(margin, y, margin + maxWidth, y);
+      y += 10;
+
+      if (Array.isArray(items)) {
+        items.forEach((item) => {
+          checkPage(22);
+          // Bold bullet dot
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(10);
+          doc.setTextColor(0, 160, 70);
+          doc.text("•", margin, y);
+          // Normal item text
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(40, 40, 40);
+          const lines = doc.splitTextToSize(item, maxWidth - 14);
+          lines.forEach((line, idx) => {
+            if (idx > 0) checkPage(16);
+            doc.text(line, margin + 14, y);
+            y += 15;
+          });
+          y += 2;
+        });
+      } else if (items) {
+        addParagraph(items, 10, [60, 60, 60], false, 1.6);
+      }
+      y += 4;
+    };
+
+    // ── White page, clean layout ──
     doc.setFillColor(255, 255, 255);
     doc.rect(0, 0, pageWidth, pageHeight, "F");
 
@@ -309,10 +327,11 @@ function DownloadButton({ note, parsed }) {
     doc.text("SMARTNOTES", margin, y);
     y += 20;
 
-    // Filename title
+    // Filename — large bold title
     addParagraph(note.filename, 20, [20, 20, 20], true, 1.3);
     y += 4;
 
+    // Word count subtitle
     if (note.word_count) {
       addParagraph(
         `${note.word_count.toLocaleString()} words`,
@@ -324,81 +343,19 @@ function DownloadButton({ note, parsed }) {
     }
     y += 6;
 
-    // Divider
+    // Divider under title
     doc.setDrawColor(220, 220, 220);
     doc.setLineWidth(0.5);
     doc.line(margin, y, margin + maxWidth, y);
     y += 16;
 
-    const { keywords, summary } = parsed;
+    const { overview, keyPoints, details, conclusions } = parsed;
+    addSection("OVERVIEW", overview);
+    addSection("KEY POINTS", keyPoints);
+    addSection("DETAILS", details);
+    addSection("CONCLUSIONS", conclusions);
 
-    // KEYWORDS section
-    if (keywords.length) {
-      checkPage(40);
-      doc.setFontSize(11);
-      doc.setTextColor(0, 160, 70);
-      doc.setFont("helvetica", "bold");
-      doc.text("KEYWORDS", margin, y);
-      y += 4;
-      doc.setDrawColor(200, 200, 200);
-      doc.setLineWidth(0.4);
-      doc.line(margin, y, margin + maxWidth, y);
-      y += 12;
-
-      const colBreak = 160;
-      const arrowW = 16;
-
-      keywords.forEach(({ keyword, description }) => {
-        checkPage(22);
-        // keyword in green bold
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.setTextColor(0, 160, 70);
-        const kwLines = doc.splitTextToSize(keyword, colBreak);
-        kwLines.forEach((line, i) => {
-          if (i > 0) checkPage(14);
-          doc.text(line, margin, y);
-          if (i < kwLines.length - 1) y += 13;
-        });
-        // arrow
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(100, 100, 100);
-        doc.text("→", margin + colBreak + 4, y);
-        // description
-        doc.setTextColor(50, 50, 50);
-        const descLines = doc.splitTextToSize(
-          description,
-          maxWidth - colBreak - arrowW,
-        );
-        descLines.forEach((line, i) => {
-          if (i > 0) {
-            checkPage(14);
-            doc.text(line, margin + colBreak + arrowW + 8, y);
-            y += 13;
-          } else doc.text(line, margin + colBreak + arrowW + 8, y);
-        });
-        y += 16;
-      });
-
-      y += 6;
-    }
-
-    // SUMMARY section
-    if (summary) {
-      checkPage(40);
-      doc.setFontSize(11);
-      doc.setTextColor(0, 160, 70);
-      doc.setFont("helvetica", "bold");
-      doc.text("SUMMARY", margin, y);
-      y += 4;
-      doc.setDrawColor(200, 200, 200);
-      doc.setLineWidth(0.4);
-      doc.line(margin, y, margin + maxWidth, y);
-      y += 12;
-      addParagraph(summary, 10, [60, 60, 60], false, 1.6);
-    }
-
-    // Footer
+    // Footer on each page
     const totalPages = doc.internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
@@ -435,30 +392,12 @@ function DownloadButton({ note, parsed }) {
   );
 }
 
-// ── NoteCard ─────────────────────────────────────────────────────────────────
-
 function NoteCard({ note, onDismiss }) {
   const [expanded, setExpanded] = useState(false);
   const ext = fileExt(note.filename);
   const parsed = parseNotesResponse(note.summary);
-  const { keywords } = parsed;
-  const hasMore = keywords.length > 6;
-
-  const badgeStyles =
-    BADGE_STYLE[ext] ?
-      Object.fromEntries(
-        BADGE_STYLE[ext]
-          .split(";")
-          .map((s) => {
-            const [k, v] = s.split(":");
-            return [
-              k.trim().replace(/-([a-z])/g, (_, c) => c.toUpperCase()),
-              v?.trim(),
-            ];
-          })
-          .filter(([k]) => k),
-      )
-    : { background: THEME.border, color: THEME.textSecondary };
+  const { keyPoints, details } = parsed;
+  const hasMore = keyPoints.length > 4 || details.length > 4;
 
   return (
     <div
@@ -469,7 +408,7 @@ function NoteCard({ note, onDismiss }) {
         overflow: "hidden",
         boxShadow: `0 0 0 1px ${THEME.border}`,
       }}>
-      {/* Accent bar */}
+      {/* Green accent top bar */}
       <div
         style={{
           height: 3,
@@ -492,7 +431,20 @@ function NoteCard({ note, onDismiss }) {
             fontWeight: 600,
             padding: "2px 7px",
             borderRadius: 6,
-            ...badgeStyles,
+            ...(BADGE_STYLE[ext] ?
+              Object.fromEntries(
+                BADGE_STYLE[ext]
+                  .split(";")
+                  .map((s) => {
+                    const [k, v] = s.split(":");
+                    return [
+                      k.trim().replace(/-([a-z])/g, (_, c) => c.toUpperCase()),
+                      v?.trim(),
+                    ];
+                  })
+                  .filter(([k]) => k),
+              )
+            : { background: THEME.border, color: THEME.textSecondary }),
           }}>
           {ext.replace(".", "").toUpperCase()}
         </span>
@@ -568,9 +520,7 @@ function NoteCard({ note, onDismiss }) {
                   color: THEME.amethyst,
                   padding: 0,
                 }}>
-                {expanded ?
-                  "↑ Show less"
-                : `↓ Show ${keywords.length - 6} more`}
+                {expanded ? "↑ Show less" : "↓ Show more"}
               </button>
             )}
           </>
@@ -598,8 +548,6 @@ function NoteCard({ note, onDismiss }) {
   );
 }
 
-// ── Pages ─────────────────────────────────────────────────────────────────────
-
 function UploadPage() {
   const [dragOver, setDragOver] = useState(false);
   const {
@@ -625,6 +573,7 @@ function UploadPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      {/* Page heading */}
       <div>
         <h2
           style={{
@@ -795,23 +744,6 @@ function UploadPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {files.map((item, i) => {
             const ext = fileExt(item.file.name);
-            const badgeStyles =
-              BADGE_STYLE[ext] ?
-                Object.fromEntries(
-                  BADGE_STYLE[ext]
-                    .split(";")
-                    .map((s) => {
-                      const [k, v] = s.split(":");
-                      return [
-                        k
-                          .trim()
-                          .replace(/-([a-z])/g, (_, c) => c.toUpperCase()),
-                        v?.trim(),
-                      ];
-                    })
-                    .filter(([k]) => k),
-                )
-              : { background: THEME.border, color: THEME.textSecondary };
             return (
               <div key={`${item.file.name}-${i}`}>
                 <div
@@ -831,7 +763,27 @@ function UploadPage() {
                       padding: "2px 7px",
                       borderRadius: 5,
                       flexShrink: 0,
-                      ...badgeStyles,
+                      ...(BADGE_STYLE[ext] ?
+                        Object.fromEntries(
+                          BADGE_STYLE[ext]
+                            .split(";")
+                            .map((s) => {
+                              const [k, v] = s.split(":");
+                              return [
+                                k
+                                  .trim()
+                                  .replace(/-([a-z])/g, (_, c) =>
+                                    c.toUpperCase(),
+                                  ),
+                                v?.trim(),
+                              ];
+                            })
+                            .filter(([k]) => k),
+                        )
+                      : {
+                          background: THEME.border,
+                          color: THEME.textSecondary,
+                        }),
                     }}>
                     {ext.replace(".", "").toUpperCase()}
                   </span>
@@ -1002,12 +954,12 @@ function HowToUsePage() {
     {
       icon: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 8v4M12 16h.01",
       title: "AI extracts the key notes",
-      body: "The document is sent to Gemini AI which reads the full text and extracts keywords with descriptions, plus a concise summary at the bottom.",
+      body: "The document is sent to Gemini AI which reads the full text and structures it into four sections: Overview, Key Points, Details, and Conclusions.",
     },
     {
       icon: "M9 12h6M9 16h6M9 8h6M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
       title: "Review your notes",
-      body: 'Notes appear as cards with keyword → description pairs and a summary. Long lists are collapsed by default — hit "Show more" to expand.',
+      body: 'Notes appear as cards below the upload area. Long note sets are collapsed by default — hit "Show more" to expand.',
     },
     {
       icon: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
@@ -1110,38 +1062,34 @@ function HowToUsePage() {
           Supported formats
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {[".pdf", ".doc", ".docx", ".ppt", ".pptx"].map((ext) => {
-            const bs =
-              BADGE_STYLE[ext] ?
-                Object.fromEntries(
-                  BADGE_STYLE[ext]
-                    .split(";")
-                    .map((s) => {
-                      const [k, v] = s.split(":");
-                      return [
-                        k
-                          .trim()
-                          .replace(/-([a-z])/g, (_, c) => c.toUpperCase()),
-                        v?.trim(),
-                      ];
-                    })
-                    .filter(([k]) => k),
-                )
-              : {};
-            return (
-              <span
-                key={ext}
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  padding: "3px 10px",
-                  borderRadius: 6,
-                  ...bs,
-                }}>
-                {ext.replace(".", "").toUpperCase()}
-              </span>
-            );
-          })}
+          {[".pdf", ".doc", ".docx", ".ppt", ".pptx"].map((ext) => (
+            <span
+              key={ext}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "3px 10px",
+                borderRadius: 6,
+                ...(BADGE_STYLE[ext] ?
+                  Object.fromEntries(
+                    BADGE_STYLE[ext]
+                      .split(";")
+                      .map((s) => {
+                        const [k, v] = s.split(":");
+                        return [
+                          k
+                            .trim()
+                            .replace(/-([a-z])/g, (_, c) => c.toUpperCase()),
+                          v?.trim(),
+                        ];
+                      })
+                      .filter(([k]) => k),
+                  )
+                : {}),
+              }}>
+              {ext.replace(".", "").toUpperCase()}
+            </span>
+          ))}
         </div>
         <p style={{ margin: "10px 0 0", fontSize: 12, color: THEME.textMuted }}>
           Max file size: 10 MB per file.
@@ -1177,8 +1125,8 @@ function AboutPage() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {[
-          "SmartNotes is a document intelligence tool that turns long, dense files into structured notes in seconds. Upload any PDF, Word doc, or PowerPoint and get back a keyword → description glossary plus a concise summary paragraph.",
-          "Text is extracted locally on the server using PyPDF2, python-docx, and python-pptx — no third-party OCR service involved. The extracted text is then sent to Google Gemini 1.5 Pro with a structured prompt. The response is stored in Supabase alongside the original file.",
+          "SmartNotes is a document intelligence tool that turns long, dense files into structured bullet-point notes in seconds. Upload any PDF, Word doc, or PowerPoint and get back a clean four-section brief: an overview, key points, supporting details, and conclusions.",
+          "Text is extracted locally on the server using PyPDF2, python-docx, and python-pptx — no third-party OCR service involved. The extracted text is then sent to Google Gemini 1.5 Pro with a structured prompt that requests the four-section format. The response is stored in Supabase alongside the original file.",
           "If Gemini is unavailable the app falls back to a simple extractive summary built from the document's sentences, so you always get something useful.",
         ].map((para, i) => (
           <p
@@ -1232,8 +1180,6 @@ function AboutPage() {
   );
 }
 
-// ── Navbar & App ──────────────────────────────────────────────────────────────
-
 function Navbar({ page, setPage }) {
   return (
     <header
@@ -1257,6 +1203,7 @@ function Navbar({ page, setPage }) {
           alignItems: "center",
           gap: 16,
         }}>
+        {/* Logo */}
         <button
           onClick={() => setPage("Upload")}
           style={{
@@ -1304,6 +1251,7 @@ function Navbar({ page, setPage }) {
           </span>
         </button>
 
+        {/* Nav */}
         <nav
           style={{
             display: "flex",
